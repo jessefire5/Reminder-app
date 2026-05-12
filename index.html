@@ -1,56 +1,372 @@
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reminder App</title>
-  
-    <!-- Theme -->
-    <meta name="theme-color" content="#1A1A28">
-  
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="manifest.json">
-  
-    <!-- iPhone / iOS App Support -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Reminders">
-    <link rel="apple-touch-icon" href="icon-192.png">
-  
-    <!-- Optional splash screen color -->
-    <meta name="mobile-web-app-capable" content="yes">
-  
-    <!-- React -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  
-    <!-- Babel -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
-    <style>
-      body {
-        margin: 0;
-        background: #1A1A28;
-        font-family: 'Inter', sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reminder App</title>
+      
+        <!-- Theme -->
+        <meta name="theme-color" content="#1A1A28">
+      
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="manifest.json">
+      
+        <!-- iPhone / iOS App Support -->
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Reminders">
+        <link rel="apple-touch-icon" href="icon-192.png">
+      
+        <!-- Optional splash screen color -->
+        <meta name="mobile-web-app-capable" content="yes">
+      
+        <!-- React -->
+        <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+        <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+      
+        <!-- Babel -->
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+      
+        <!-- Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      
+        <style>
+          body {
+            margin: 0;
+            background: #1A1A28;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+          }
+      
+          * {
+            box-sizing: border-box;
+          }
+      
+          button,
+          input,
+          textarea {
+            font-family: inherit;
+          }
+      
+          ::-webkit-scrollbar {
+            display: none;
+          }
+        </style>
+      </head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+
+const { useState, useEffect, useRef } = React;
+
+const BG="#1A1A28";
+const CARD="#242435";
+const TEAL="#5ECFCF";
+const CORAL="#FF6B47";
+
+const CARD_CYCLE=[TEAL,CARD,CORAL];
+
+const IGAP={
+  daily:1,
+  everyOther:2,
+  weekly:7,
+  biWeekly:14,
+  monthly:30
+};
+
+const ILABEL={
+  daily:"Daily",
+  everyOther:"Every Other Day",
+  weekly:"Weekly",
+  biWeekly:"Bi-Weekly",
+  monthly:"Monthly"
+};
+
+const FM={
+  low:{
+    label:"Low",
+    s:"L",
+    color:TEAL,
+    bg:"rgba(94,207,207,0.15)"
+  },
+  medium:{
+    label:"Medium",
+    s:"M",
+    color:"#ddd",
+    bg:"rgba(255,255,255,0.08)"
+  },
+  high:{
+    label:"High",
+    s:"H",
+    color:CORAL,
+    bg:"rgba(255,107,71,0.15)"
+  }
+};
+
+const EF={
+  name:"",
+  type:"assignment",
+  description:"",
+  dueDate:"",
+  interval:"daily",
+  frequency:"low",
+  checklist:[],
+  done:false
+};
+
+function gd(s){
+  const d=new Date(s+"T00:00:00");
+  const t=new Date();
+  t.setHours(0,0,0,0);
+  return Math.ceil((d-t)/86400000);
+}
+
+function fmtDue(s){
+  return new Date(s+"T12:00:00")
+    .toLocaleDateString("en-US", {
+      month:"short",
+      day:"numeric",
+      year:"numeric"
+    });
+}
+
+function urgL(d){
+  if(d<0) return "Past Due";
+  if(d===0) return "Due Today";
+  if(d===1) return "Tomorrow";
+  return d+"d left";
+}
+
+function todayD(){
+  return new Date()
+    .getDate()
+    .toString()
+    .padStart(2,"0");
+}
+
+function todayM(){
+  return new Date()
+    .toLocaleDateString("en-US", {
+      month:"long",
+      year:"numeric"
+    });
+}
+
+function todayW(){
+  return new Date()
+    .toLocaleDateString("en-US", {
+      weekday:"long"
+    });
+}
+
+function App(){
+
+  const [items,setItems]=useState([]);
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState(EF);
+
+  useEffect(()=>{
+    const saved=localStorage.getItem("reminders");
+    if(saved){
+      setItems(JSON.parse(saved));
+    }
+  },[]);
+
+  useEffect(()=>{
+    localStorage.setItem(
+      "reminders",
+      JSON.stringify(items)
+    );
+  },[items]);
+
+  function addItem(){
+    if(!form.name || !form.dueDate){
+      alert("Name and date required");
+      return;
+    }
+
+    setItems([
+      ...items,
+      {
+        ...form,
+        id:Date.now()
       }
-  
-      * {
-        box-sizing: border-box;
-      }
-  
-      button,
-      input,
-      textarea {
-        font-family: inherit;
-      }
-  
-      ::-webkit-scrollbar {
-        display: none;
-      }
-    </style>
-  </head>
+    ]);
+
+    setForm(EF);
+    setModal(false);
+  }
+
+  function del(id){
+    setItems(
+      items.filter(i=>i.id!==id)
+    );
+  }
+
+  return(
+    <div style={{
+      maxWidth:"430px",
+      margin:"0 auto",
+      minHeight:"100vh",
+      background:BG,
+      color:"#fff",
+      padding:"20px"
+    }}>
+
+      <h1 style={{
+        fontSize:"60px",
+        margin:0
+      }}>
+        {todayD()}
+      </h1>
+
+      <div style={{opacity:.5}}>
+        {todayM()}
+      </div>
+
+      <div style={{opacity:.3}}>
+        {todayW()}
+      </div>
+
+      <button
+        onClick={()=>setModal(true)}
+        style={{
+          marginTop:"20px",
+          width:"50px",
+          height:"50px",
+          borderRadius:"15px",
+          border:"none",
+          background:CORAL,
+          color:"#fff",
+          fontSize:"28px",
+          cursor:"pointer"
+        }}
+      >
+        +
+      </button>
+
+      <h2>Reminders</h2>
+
+      {items.length===0 && (
+        <p style={{opacity:.3}}>
+          No reminders yet
+        </p>
+      )}
+
+      {items.map((item,idx)=>(
+        <div
+          key={item.id}
+          style={{
+            background:CARD_CYCLE[idx%3],
+            padding:"20px",
+            borderRadius:"20px",
+            marginBottom:"10px"
+          }}
+        >
+          <h3>{item.name}</h3>
+          <p>{fmtDue(item.dueDate)}</p>
+          <p>{urgL(gd(item.dueDate))}</p>
+
+          <button
+            onClick={()=>del(item.id)}
+            style={{
+              border:"none",
+              padding:"8px 12px",
+              borderRadius:"10px",
+              cursor:"pointer"
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ))}
+
+      {modal && (
+        <div style={{
+          position:"fixed",
+          inset:0,
+          background:"rgba(0,0,0,.7)",
+          display:"flex",
+          justifyContent:"center",
+          alignItems:"center"
+        }}>
+          <div style={{
+            background:"#242435",
+            padding:"20px",
+            borderRadius:"20px",
+            width:"300px"
+          }}>
+            <h2>Add Reminder</h2>
+
+            <input
+              placeholder="Reminder Name"
+              value={form.name}
+              onChange={e=>setForm({
+                ...form,
+                name:e.target.value
+              })}
+              style={{
+                width:"100%",
+                padding:"10px",
+                marginBottom:"10px"
+              }}
+            />
+
+            <input
+              type="date"
+              value={form.dueDate}
+              onChange={e=>setForm({
+                ...form,
+                dueDate:e.target.value
+              })}
+              style={{
+                width:"100%",
+                padding:"10px",
+                marginBottom:"10px"
+              }}
+            />
+
+            <button
+              onClick={addItem}
+              style={{
+                background:TEAL,
+                border:"none",
+                padding:"10px 20px",
+                borderRadius:"10px",
+                marginRight:"10px"
+              }}
+            >
+              Save
+            </button>
+
+            <button
+              onClick={()=>setModal(false)}
+              style={{
+                background:CORAL,
+                border:"none",
+                padding:"10px 20px",
+                borderRadius:"10px"
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(
+  document.getElementById("root")
+).render(<App />);
+
+</script>
+</body>
+</html>
