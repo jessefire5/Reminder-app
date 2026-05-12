@@ -1,372 +1,296 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reminder App</title>
-      
-        <!-- Theme -->
-        <meta name="theme-color" content="#1A1A28">
-      
-        <!-- PWA Manifest -->
-        <link rel="manifest" href="manifest.json">
-      
-        <!-- iPhone / iOS App Support -->
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="Reminders">
-        <link rel="apple-touch-icon" href="icon-192.png">
-      
-        <!-- Optional splash screen color -->
-        <meta name="mobile-web-app-capable" content="yes">
-      
-        <!-- React -->
-        <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-        <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-      
-        <!-- Babel -->
-        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-      
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-      
-        <style>
-          body {
-            margin: 0;
-            background: #1A1A28;
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-      
-          * {
-            box-sizing: border-box;
-          }
-      
-          button,
-          input,
-          textarea {
-            font-family: inherit;
-          }
-      
-          ::-webkit-scrollbar {
-            display: none;
-          }
-        </style>
-      </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reminders App</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; background: #1A1A28; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
 <body>
+    <div id="root"></div>
 
-<div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-<script type="text/babel">
+        const BG="#1A1A28", CARD="#242435", TEAL="#5ECFCF", CORAL="#FF6B47";
+        const CARD_CYCLE=[TEAL,CARD,CORAL];
+        const IGAP={daily:1,everyOther:2,weekly:7,biWeekly:14,monthly:30};
+        const ILABEL={daily:"Daily",everyOther:"Every Other Day",weekly:"Weekly",biWeekly:"Bi-Weekly",monthly:"Monthly"};
+        const FM={low:{label:"Low",s:"L",color:TEAL,bg:"rgba(94,207,207,0.15)"},medium:{label:"Medium",s:"M",color:"rgba(220,220,255,0.8)",bg:"rgba(255,255,255,0.08)"},high:{label:"High",s:"H",color:CORAL,bg:"rgba(255,107,71,0.15)"}};
 
-const { useState, useEffect, useRef } = React;
+        const gd=s=>{const d=new Date(s+"T00:00:00"),t=new Date();t.setHours(0,0,0,0);return Math.ceil((d-t)/86400000);};
+        const isRD=item=>{const d=gd(item.dueDate);if(d<0)return false;if(d===0)return true;return d%IGAP[item.interval]===0;};
+        const isRDon=(item,ds)=>{const due=new Date(item.dueDate+"T00:00:00"),chk=new Date(ds+"T00:00:00");if(chk>due)return false;const diff=Math.ceil((due-chk)/86400000);if(diff===0)return true;return diff%IGAP[item.interval]===0;};
+        const fmtDue=s=>new Date(s+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+        const urgL=d=>d<0?"Past Due":d===0?"Due Today":d===1?"Tomorrow":`${d}d left`;
+        const todayD=()=>new Date().getDate().toString().padStart(2,"0");
+        const todayM=()=>new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"});
+        const todayW=()=>new Date().toLocaleDateString("en-US",{weekday:"long"});
+        const WDAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+        const EF={name:"",type:"assignment",description:"",dueDate:"",interval:"daily",frequency:"low",checklist:[],done:false};
 
-const BG="#1A1A28";
-const CARD="#242435";
-const TEAL="#5ECFCF";
-const CORAL="#FF6B47";
+        function Checklist({item,onToggle,onAdd,onRemove}){
+            const [open,setOpen]=useState(false);
+            const [val,setVal]=useState("");
+            const cl=item.checklist||[];
+            const done=cl.filter(c=>c.done).length;
+            const pct=cl.length?Math.round((done/cl.length)*100):0;
+            return(
+                <div style={{marginTop:10}}>
+                    <button onClick={()=>setOpen(o=>!o)} style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",color:"rgba(255,255,255,0.45)",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+                        {cl.length>0?`☑ ${done}/${cl.length} · ${pct}%`:"☐ Add checklist"}
+                        <span style={{fontSize:9}}>{open?"▲":"▼"}</span>
+                    </button>
+                    {cl.length>0&&<div style={{height:2,background:"rgba(255,255,255,0.06)",borderRadius:2,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?TEAL:CORAL,borderRadius:2,transition:"width .3s"}}/></div>}
+                    {open&&<div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:10,marginTop:6}}>
+                        {cl.map(c=>(
+                            <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                                <div onClick={()=>onToggle(item.id,c.id)} style={{width:15,height:15,borderRadius:4,border:`2px solid ${c.done?TEAL:"rgba(255,255,255,0.2)"}`,background:c.done?"rgba(94,207,207,0.2)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                    {c.done&&<span style={{color:TEAL,fontSize:9}}>✓</span>}
+                                </div>
+                                <span style={{flex:1,fontSize:12,color:c.done?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.75)",textDecoration:c.done?"line-through":"none"}}>{c.text}</span>
+                                <button onClick={()=>onRemove(item.id,c.id)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.15)",cursor:"pointer",fontSize:12,padding:0}}>✕</button>
+                            </div>
+                        ))}
+                        <div style={{display:"flex",gap:6,marginTop:8}}>
+                            <input value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&val.trim()){onAdd(item.id,val);setVal("");}}} placeholder="Add task..." style={{flex:1,background:"rgba(255,255,255,0.06)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:12,fontFamily:"inherit",color:"#fff",outline:"none"}}/>
+                            <button onClick={()=>{if(val.trim()){onAdd(item.id,val);setVal("");}}} style={{background:TEAL,border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,color:BG,fontSize:14,fontFamily:"inherit"}}>+</button>
+                        </div>
+                    </div>}
+                </div>
+            );
+        }
 
-const CARD_CYCLE=[TEAL,CARD,CORAL];
+        function App(){
+            const [tab,setTab]=useState("home");
+            const [items,setItems]=useState([]);
+            const [modal,setModal]=useState(false);
+            const [form,setForm]=useState(EF);
+            const [chi,setChi]=useState("");
+            const [err,setErr]=useState("");
+            const [filter,setFilter]=useState("all");
+            const chRef=useRef();
 
-const IGAP={
-  daily:1,
-  everyOther:2,
-  weekly:7,
-  biWeekly:14,
-  monthly:30
-};
+            useEffect(() => {
+                const saved = localStorage.getItem("rm_v6");
+                if (saved) setItems(JSON.parse(saved));
+            }, []);
 
-const ILABEL={
-  daily:"Daily",
-  everyOther:"Every Other Day",
-  weekly:"Weekly",
-  biWeekly:"Bi-Weekly",
-  monthly:"Monthly"
-};
+            useEffect(() => {
+                localStorage.setItem("rm_v6", JSON.stringify(items));
+            }, [items]);
 
-const FM={
-  low:{
-    label:"Low",
-    s:"L",
-    color:TEAL,
-    bg:"rgba(94,207,207,0.15)"
-  },
-  medium:{
-    label:"Medium",
-    s:"M",
-    color:"#ddd",
-    bg:"rgba(255,255,255,0.08)"
-  },
-  high:{
-    label:"High",
-    s:"H",
-    color:CORAL,
-    bg:"rgba(255,107,71,0.15)"
-  }
-};
+            const addItem=()=>{if(!form.name.trim())return setErr("Name is required.");if(!form.dueDate)return setErr("Due date is required.");setItems(p=>[...p,{...form,id:Date.now()}]);setModal(false);setForm(EF);setChi("");setErr("");};
+            const del=id=>setItems(p=>p.filter(i=>i.id!==id));
+            const toggleDone=id=>setItems(p=>p.map(i=>i.id===id?{...i,done:!i.done}:i));
+            const togCh=(ii,ci)=>setItems(p=>p.map(it=>it.id!==ii?it:{...it,checklist:it.checklist.map(c=>c.id===ci?{...c,done:!c.done}:c)}));
+            const addCh=(ii,txt)=>{if(!txt.trim())return;setItems(p=>p.map(it=>it.id!==ii?it:{...it,checklist:[...(it.checklist||[]),{id:Date.now(),text:txt.trim(),done:false}]}));};
+            const remCh=(ii,ci)=>setItems(p=>p.map(it=>it.id!==ii?it:{...it,checklist:it.checklist.filter(c=>c.id!==ci)}));
+            const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
 
-const EF={
-  name:"",
-  type:"assignment",
-  description:"",
-  dueDate:"",
-  interval:"daily",
-  frequency:"low",
-  checklist:[],
-  done:false
-};
+            const sorted=[...items].sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
+            const completed=items.filter(i=>i.done).length;
+            const scheduled=items.filter(i=>!i.done).length;
 
-function gd(s){
-  const d=new Date(s+"T00:00:00");
-  const t=new Date();
-  t.setHours(0,0,0,0);
-  return Math.ceil((d-t)/86400000);
-}
+            const weekDates=()=>{const t=new Date();t.setHours(0,0,0,0);const day=t.getDay();const mon=new Date(t);mon.setDate(t.getDate()-(day===0?6:day-1));return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
+            const WD=weekDates();
 
-function fmtDue(s){
-  return new Date(s+"T12:00:00")
-    .toLocaleDateString("en-US", {
-      month:"short",
-      day:"numeric",
-      year:"numeric"
-    });
-}
+            const filtSched=sorted.filter(item=>{const d=gd(item.dueDate);if(filter==="overdue")return d<0;if(filter==="week")return d>=0&&d<=7;if(filter==="upcoming")return d>7;return true;});
 
-function urgL(d){
-  if(d<0) return "Past Due";
-  if(d===0) return "Due Today";
-  if(d===1) return "Tomorrow";
-  return d+"d left";
-}
+            const openModal=()=>{setModal(true);setErr("");setChi("");};
 
-function todayD(){
-  return new Date()
-    .getDate()
-    .toString()
-    .padStart(2,"0");
-}
+            const NavBtn=({t,icon,label})=>(
+                <button onClick={()=>setTab(t)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:tab===t?"#fff":"rgba(255,255,255,0.25)",fontFamily:"inherit",padding:"4px 6px",minWidth:44}}>
+                    <span style={{fontSize:22}}>{icon}</span>
+                    <span style={{fontSize:9,fontWeight:tab===t?700:400,letterSpacing:".3px"}}>{label}</span>
+                </button>
+            );
 
-function todayM(){
-  return new Date()
-    .toLocaleDateString("en-US", {
-      month:"long",
-      year:"numeric"
-    });
-}
+            const inp0={background:"rgba(255,255,255,0.06)",border:"none",borderRadius:16,color:"#fff",fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
 
-function todayW(){
-  return new Date()
-    .toLocaleDateString("en-US", {
-      weekday:"long"
-    });
-}
+            return(
+                <div style={{background:BG,minHeight:"100vh",color:"#fff",fontFamily:"'Inter',system-ui,sans-serif",maxWidth:430,margin:"0 auto",position:"relative",overflowX:"hidden"}}>
+                    <div style={{padding:"14px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,fontWeight:600}}>
+                        <span>9:41</span>
+                        <div style={{width:120,height:24,background:"#000",borderRadius:20,margin:"0 auto"}}/>
+                        <div style={{display:"flex",gap:4,fontSize:10,color:"rgba(255,255,255,0.7)",alignItems:"center"}}>
+                            <span>▲▲▲</span><span>WiFi</span><span>🔋</span>
+                        </div>
+                    </div>
 
-function App(){
+                    <div style={{paddingBottom:96}}>
+                    {tab==="home"&&<div style={{padding:"20px 22px 0"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
+                            <div>
+                                <div style={{fontSize:62,fontWeight:800,lineHeight:1,letterSpacing:"-3px"}}>{todayD()}</div>
+                                <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginTop:2}}>{todayM()}</div>
+                                <div style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:1}}>{todayW()}</div>
+                            </div>
+                            <button onClick={openModal} style={{width:46,height:46,borderRadius:15,background:CORAL,border:"none",color:"#fff",fontSize:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:8,boxShadow:`0 6px 22px ${CORAL}55`,fontWeight:300}}>+</button>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
+                            {[["Completed",completed],["Scheduled",scheduled]].map(([l,v])=>(
+                                <div key={l} style={{background:CARD,borderRadius:22,padding:"18px 20px"}}>
+                                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+                                        <span style={{fontSize:12,color:"rgba(255,255,255,0.35)",fontWeight:500}}>{l}</span>
+                                        <span style={{color:"rgba(255,255,255,0.12)",fontSize:18}}>⋮</span>
+                                    </div>
+                                    <div style={{fontSize:50,fontWeight:800,lineHeight:1,letterSpacing:"-2px",color:v===0?"rgba(255,255,255,0.12)":"#fff"}}>{v.toString().padStart(2,"0")}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                            <span style={{fontSize:15,fontWeight:700}}>All Reminders</span>
+                            <button onClick={()=>setTab("scheduled")} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:18,padding:0}}>↗</button>
+                        </div>
+                        {sorted.length===0
+                            ?<div style={{textAlign:"center",padding:"60px 0",color:"rgba(255,255,255,0.12)"}}>
+                                <div style={{fontSize:38,marginBottom:8}}>📭</div>
+                                <div style={{fontSize:13}}>No reminders yet — tap + to add</div>
+                            </div>
+                            :sorted.map((item,idx)=>{
+                                const bg=CARD_CYCLE[idx%3]; const lit=bg===TEAL; const tm=lit?"#1A1A28":"#fff"; const ts=lit?"rgba(0,0,0,0.4)":"rgba(255,255,255,0.38)";
+                                const d=gd(item.dueDate); const cl=item.checklist||[]; const cld=cl.filter(c=>c.done).length; const fm=FM[item.frequency];
+                                return(
+                                    <div key={item.id} style={{background:bg,borderRadius:26,padding:"20px 22px",marginBottom:12,opacity:item.done?.45:1,transition:"opacity .2s"}}>
+                                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                                            <div style={{flex:1,paddingRight:10}}>
+                                                <div style={{fontSize:30,fontWeight:800,color:ts,lineHeight:1,marginBottom:6,letterSpacing:"-1px"}}>{(idx+1).toString().padStart(2,"0")}</div>
+                                                <div style={{fontSize:16,fontWeight:700,color:tm,lineHeight:1.3,marginBottom:4}}>{item.name}</div>
+                                                <div style={{fontSize:11,color:ts}}>{fmtDue(item.dueDate)} · {urgL(d)}</div>
+                                                {cl.length>0&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}>
+                                                    <div style={{flex:1,height:2,background:lit?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.12)",borderRadius:2,overflow:"hidden"}}>
+                                                        <div style={{height:"100%",width:`${cl.length?Math.round((cld/cl.length)*100):0}%`,background:lit?"rgba(0,0,0,0.3)":TEAL,borderRadius:2}}/>
+                                                    </div>
+                                                    <span style={{fontSize:10,color:ts,whiteSpace:"nowrap"}}>{cld}/{cl.length}</span>
+                                                </div>}
+                                            </div>
+                                            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                                                <button onClick={()=>del(item.id)} style={{background:"rgba(0,0,0,0.15)",border:"none",borderRadius:10,width:30,height:30,cursor:"pointer",color:tm,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",opacity:.5}}>✕</button>
+                                                <div style={{width:30,height:30,borderRadius:"50%",background:lit?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:lit?BG:fm.color}}>{fm.s}</div>
+                                                <button onClick={()=>toggleDone(item.id)} style={{background:"none",border:"none",color:tm,cursor:"pointer",fontSize:20,padding:0,opacity:.5}}>↗</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                    </div>}
 
-  const [items,setItems]=useState([]);
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState(EF);
+                    {tab==="scheduled"&&<div style={{padding:"20px 22px 0"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+                            <button onClick={()=>setTab("home")} style={{background:CARD,border:"none",borderRadius:12,width:38,height:38,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+                            <span style={{fontSize:18,fontWeight:700}}>Scheduled</span>
+                            <button onClick={openModal} style={{background:"none",border:"none",color:CORAL,cursor:"pointer",fontSize:22,padding:0}}>+</button>
+                        </div>
+                        <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:4,marginBottom:20}}>
+                            {[["all","All"],["overdue","Overdue"],["week","Current week"],["upcoming","Upcoming"]].map(([k,l])=>(
+                                <button key={k} onClick={()=>setFilter(k)} style={{padding:"8px 16px",borderRadius:30,border:"none",background:filter===k?(k==="overdue"?"#FF453A":k==="week"?TEAL:CORAL):"rgba(255,255,255,0.07)",color:filter===k?(k==="week"?BG:"#fff"):"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,fontWeight:filter===k?700:400,fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>{l}</button>
+                            ))}
+                        </div>
+                        {filtSched.map(item=>{
+                            const d=gd(item.dueDate);const fm=FM[item.frequency];
+                            const cl=item.checklist||[];const cld=cl.filter(c=>c.done).length;
+                            return(
+                                <div key={item.id} style={{background:CARD,borderRadius:22,padding:"18px 20px",marginBottom:12,borderLeft:`3px solid ${fm.color}`}}>
+                                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                                        <div style={{flex:1,paddingRight:12}}>
+                                            <div style={{fontSize:17,fontWeight:700,marginBottom:4}}>{item.name}</div>
+                                            <div style={{fontSize:12,color:"rgba(255,255,255,0.38)"}}>{fmtDue(item.dueDate)} · {urgL(d)}</div>
+                                        </div>
+                                        <div style={{width:30,height:30,borderRadius:"50%",background:fm.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:fm.color}}>{fm.s}</div>
+                                    </div>
+                                    <Checklist item={item} onToggle={togCh} onAdd={addCh} onRemove={remCh}/>
+                                </div>
+                            );
+                        })}
+                    </div>}
 
-  useEffect(()=>{
-    const saved=localStorage.getItem("reminders");
-    if(saved){
-      setItems(JSON.parse(saved));
-    }
-  },[]);
+                    {tab==="weekly"&&<div style={{padding:"20px 22px 0"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                            <button onClick={()=>setTab("home")} style={{background:CARD,border:"none",borderRadius:12,width:38,height:38,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+                            <span style={{fontSize:18,fontWeight:700}}>Weekly View</span>
+                            <div style={{width:38}}/>
+                        </div>
+                        <div style={{background:CARD,borderRadius:20,overflow:"hidden"}}>
+                            <div style={{display:"grid",gridTemplateColumns:"44px repeat(7,1fr)",background:"rgba(0,0,0,0.2)"}}>
+                                <div/>
+                                {WD.map((d,i)=>(
+                                    <div key={i} style={{padding:"10px 2px",textAlign:"center"}}>
+                                        <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",marginBottom:4}}>{WDAYS[i]}</div>
+                                        <div style={{fontSize:12,color:d.toDateString()===new Date().toDateString()?CORAL:"#fff"}}>{d.getDate()}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {sorted.map((item,idx)=>(
+                                <div key={item.id} style={{display:"grid",gridTemplateColumns:"44px repeat(7,1fr)",borderTop:"1px solid rgba(255,255,255,0.04)",minHeight:46}}>
+                                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",fontSize:9}}>{FM[item.frequency].s}</div>
+                                    {WD.map((d,i)=>(
+                                        <div key={i} style={{borderLeft:"1px solid rgba(255,255,255,0.04)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                            {isRDon(item,`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`) && 
+                                            <div style={{width:8,height:8,borderRadius:"50%",background:CARD_CYCLE[idx%3]}}/>}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>}
 
-  useEffect(()=>{
-    localStorage.setItem(
-      "reminders",
-      JSON.stringify(items)
-    );
-  },[items]);
+                    {tab==="stats"&&<div style={{padding:"20px 22px 0"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+                            <button onClick={()=>setTab("home")} style={{background:CARD,border:"none",borderRadius:12,width:38,height:38,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+                            <span style={{fontSize:18,fontWeight:700}}>Overview</span>
+                            <div style={{width:38}}/>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                            {[["Total",items.length,TEAL],["Done",completed,"#30D158"]].map(([l,v,c])=>(
+                                <div key={l} style={{background:CARD,borderRadius:20,padding:"18px 18px"}}>
+                                    <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginBottom:10}}>{l}</div>
+                                    <div style={{fontSize:40,fontWeight:800,color:c}}>{v}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>}
+                    </div>
 
-  function addItem(){
-    if(!form.name || !form.dueDate){
-      alert("Name and date required");
-      return;
-    }
+                    {modal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={e=>{if(e.target===e.currentTarget){setModal(false);setErr("");}}}>
+                        <div style={{background:"#1E1E2E",borderRadius:"28px 28px 0 0",padding:"24px 20px 52px",width:"100%",maxWidth:430}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+                                <button onClick={()=>{setModal(false);setErr("");}} style={{background:CARD,border:"none",borderRadius:12,width:40,height:40,color:"#fff"}}>←</button>
+                                <span style={{fontSize:17,fontWeight:700}}>Add Reminder</span>
+                                <button onClick={addItem} style={{background:TEAL,border:"none",borderRadius:12,width:40,height:40,color:BG,fontWeight:800}}>✓</button>
+                            </div>
+                            <input value={form.name} onChange={e=>ff("name",e.target.value)} placeholder="Name..." style={{...inp0,width:"100%",padding:"15px 18px",fontSize:16,marginBottom:12}}/>
+                            <input type="date" value={form.dueDate} onChange={e=>ff("dueDate",e.target.value)} style={{...inp0,width:"100%",padding:"15px 18px",fontSize:15,marginBottom:12,colorScheme:"dark"}}/>
+                            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+                                {Object.entries(ILABEL).map(([k,v])=>(
+                                    <button key={k} onClick={()=>ff("interval",k)} style={{padding:"7px 12px",borderRadius:30,border:"none",background:form.interval===k?TEAL:"rgba(255,255,255,0.07)",color:form.interval===k?BG:"#fff"}}>{v}</button>
+                                ))}
+                            </div>
+                            {err&&<p style={{color:CORAL,fontSize:13}}>{err}</p>}
+                        </div>
+                    </div>}
 
-    setItems([
-      ...items,
-      {
-        ...form,
-        id:Date.now()
-      }
-    ]);
+                    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(22,22,34,0.97)",backdropFilter:"blur(24px)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"10px 8px 28px"}}>
+                        <NavBtn t="home" icon="🏠" label="Home"/>
+                        <NavBtn t="scheduled" icon="🗓" label="Sched"/>
+                        <button onClick={openModal} style={{width:56,height:56,borderRadius:18,background:CORAL,border:"none",color:"#fff",fontSize:28}}>+</button>
+                        <NavBtn t="weekly" icon="📅" label="Week"/>
+                        <NavBtn t="stats" icon="📊" label="Stats"/>
+                    </div>
+                </div>
+            );
+        }
 
-    setForm(EF);
-    setModal(false);
-  }
-
-  function del(id){
-    setItems(
-      items.filter(i=>i.id!==id)
-    );
-  }
-
-  return(
-    <div style={{
-      maxWidth:"430px",
-      margin:"0 auto",
-      minHeight:"100vh",
-      background:BG,
-      color:"#fff",
-      padding:"20px"
-    }}>
-
-      <h1 style={{
-        fontSize:"60px",
-        margin:0
-      }}>
-        {todayD()}
-      </h1>
-
-      <div style={{opacity:.5}}>
-        {todayM()}
-      </div>
-
-      <div style={{opacity:.3}}>
-        {todayW()}
-      </div>
-
-      <button
-        onClick={()=>setModal(true)}
-        style={{
-          marginTop:"20px",
-          width:"50px",
-          height:"50px",
-          borderRadius:"15px",
-          border:"none",
-          background:CORAL,
-          color:"#fff",
-          fontSize:"28px",
-          cursor:"pointer"
-        }}
-      >
-        +
-      </button>
-
-      <h2>Reminders</h2>
-
-      {items.length===0 && (
-        <p style={{opacity:.3}}>
-          No reminders yet
-        </p>
-      )}
-
-      {items.map((item,idx)=>(
-        <div
-          key={item.id}
-          style={{
-            background:CARD_CYCLE[idx%3],
-            padding:"20px",
-            borderRadius:"20px",
-            marginBottom:"10px"
-          }}
-        >
-          <h3>{item.name}</h3>
-          <p>{fmtDue(item.dueDate)}</p>
-          <p>{urgL(gd(item.dueDate))}</p>
-
-          <button
-            onClick={()=>del(item.id)}
-            style={{
-              border:"none",
-              padding:"8px 12px",
-              borderRadius:"10px",
-              cursor:"pointer"
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      ))}
-
-      {modal && (
-        <div style={{
-          position:"fixed",
-          inset:0,
-          background:"rgba(0,0,0,.7)",
-          display:"flex",
-          justifyContent:"center",
-          alignItems:"center"
-        }}>
-          <div style={{
-            background:"#242435",
-            padding:"20px",
-            borderRadius:"20px",
-            width:"300px"
-          }}>
-            <h2>Add Reminder</h2>
-
-            <input
-              placeholder="Reminder Name"
-              value={form.name}
-              onChange={e=>setForm({
-                ...form,
-                name:e.target.value
-              })}
-              style={{
-                width:"100%",
-                padding:"10px",
-                marginBottom:"10px"
-              }}
-            />
-
-            <input
-              type="date"
-              value={form.dueDate}
-              onChange={e=>setForm({
-                ...form,
-                dueDate:e.target.value
-              })}
-              style={{
-                width:"100%",
-                padding:"10px",
-                marginBottom:"10px"
-              }}
-            />
-
-            <button
-              onClick={addItem}
-              style={{
-                background:TEAL,
-                border:"none",
-                padding:"10px 20px",
-                borderRadius:"10px",
-                marginRight:"10px"
-              }}
-            >
-              Save
-            </button>
-
-            <button
-              onClick={()=>setModal(false)}
-              style={{
-                background:CORAL,
-                border:"none",
-                padding:"10px 20px",
-                borderRadius:"10px"
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-ReactDOM.createRoot(
-  document.getElementById("root")
-).render(<App />);
-
-</script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
